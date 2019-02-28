@@ -24,6 +24,7 @@
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/cpu.h>
+#include <linux/cpu_cooling.h>
 #include <linux/platform_device.h>
 #include <linux/of_platform.h>
 #include <linux/pm_opp.h>
@@ -402,6 +403,8 @@ struct clk_osm {
 	bool trace_en;
 	bool wdog_trace_en;
 };
+
+static struct thermal_cooling_device **osm_cdev;
 
 static inline void clk_osm_masked_write_reg(struct clk_osm *c, u32 val,
 					    u32 offset, u32 mask)
@@ -2126,6 +2129,46 @@ static void clk_osm_setup_cycle_counters(struct clk_osm *c)
 	pr_debug("OSM to XO clock ratio: %d\n", ratio);
 }
 
+static void osm_cpufreq_ready(struct cpufreq_policy *policy)
+{
+	struct device_node *polcpunode, *cpunode;
+	unsigned int cpu = 0;
+
+	/* If the cooling device is initialized, there's nothing to do */
+	if (osm_cdev[policy->cpu])
+		return;
+
+	polcpunode = of_cpu_device_node_get(policy->cpu);
+	if (WARN_ON(!polcpunode))
+		return;
+
+	/* Load the cooling device */
+	if (of_find_property(polcpunode, "#cooling-cells", NULL)) {
+		/* For each cpu in this cluster */
+		for_each_cpu(cpu, policy->related_cpus) {
+			cpumask_t mask = CPU_MASK_NONE;
+
+			cpunode = of_cpu_device_node_get(cpu);
+			if (WARN_ON(!cpunode))
+				return;
+
+			cpumask_set_cpu(cpu, &mask);
+			osm_cdev[cpu] = of_cpufreq_cooling_register(
+							cpunode, &mask);
+			if (IS_ERR(osm_cdev[cpu])) {
+				pr_warn("%s: Cannot register cooling device "
+					"for CPU%d: %ld\n", __func__,
+					cpu, PTR_ERR(osm_cdev[cpu]));
+				osm_cdev[cpu] = NULL;
+			} else {
+				pr_debug("OSM: Registered cdev, CPU%d\n", cpu);
+			}
+			of_node_put(cpunode);
+		}
+	}
+	of_node_put(polcpunode);
+}
+
 static void clk_osm_setup_fsms(struct clk_osm *c)
 {
 	u32 val;
@@ -2409,6 +2452,20 @@ static int clk_osm_setup_irq(struct platform_device *pdev, struct clk_osm *c,
 
 	return rc;
 }
+
+static struct cpufreq_driver qcom_osm_cpufreq_driver = {
+	.flags		= CPUFREQ_STICKY | CPUFREQ_NEED_INITIAL_FREQ_CHECK |
+			  CPUFREQ_HAVE_GOVERNOR_PER_POLICY,
+	.verify		= cpufreq_generic_frequency_table_verify,
+	.target_index	= osm_cpufreq_target_index,
+	.get		= osm_cpufreq_get,
+	.init		= osm_cpufreq_cpu_init,
+	.exit		= osm_cpufreq_cpu_exit,
+	.name		= "osm-cpufreq",
+	.attr		= osm_cpufreq_attr,
+	.ready		= osm_cpufreq_ready,
+	.boost_enabled	= true,
+};
 
 static u32 find_voltage(struct clk_osm *c, unsigned long rate)
 {
@@ -3125,7 +3182,7 @@ static unsigned long perfcl_boot_rate = 1747200000;
 
 static int clk_cpu_osm_driver_probe(struct platform_device *pdev)
 {
-	int rc = 0, cpu, i;
+	int rc = 0, cpu, i, num_cpus;
 	int speedbin = 0, pvs_ver = 0;
 	bool is_sdm630 = 0;
 	u32 pte_efuse;
@@ -3345,6 +3402,25 @@ static int clk_cpu_osm_driver_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Unable to register CPU clocks\n");
 			goto provider_err;
 	}
+
+	/* Allocate the cooling device array */
+	num_cpus = pwrcl_clk.max_core_count + perfcl_clk.max_core_count;
+	osm_cdev = devm_kzalloc(&pdev->dev,
+			num_cpus * sizeof(struct clk_onecell_data),
+			GFP_KERNEL);
+	if (!osm_cdev)
+		goto provider_err;
+
+	get_online_cpus();
+
+	WARN(clk_prepare_enable(l3_cluster0_vote_clk.hw.clk),
+			"clk: Failed to enable cluster0 clock for L3\n");
+	WARN(clk_prepare_enable(l3_cluster1_vote_clk.hw.clk),
+			"clk: Failed to enable cluster1 clock for L3\n");
+	WARN(clk_prepare_enable(l3_misc_vote_clk.hw.clk),
+			"clk: Failed to enable misc clock for L3\n");
+	WARN(clk_prepare_enable(l3_gpu_vote_clk.hw.clk),
+			"clk: Failed to enable iocoherent bwmon clock for L3\n");
 
 	/*
 	 * The hmss_gpll0 clock runs at 300 MHz. Ensure it is at the correct
