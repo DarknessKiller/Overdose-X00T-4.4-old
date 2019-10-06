@@ -3838,7 +3838,7 @@ void asus_chg_flow_work(struct work_struct *work)
 		if (rc < 0)
 			printk("%s: Couldn't read fast_CURRENT_LIMIT_CFG_REG\n", __func__);
 #endif
-			set_icl = ICL_500mA;
+			set_icl = ICL_1500mA;
 		rc = smblib_masked_write(smbchg_dev, USBIN_CURRENT_LIMIT_CFG_REG,
 			USBIN_CURRENT_LIMIT_MASK, set_icl);
 		if (rc < 0)
