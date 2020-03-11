@@ -331,7 +331,6 @@ static void msm_restart_prepare(const char *cmd)
 			unsigned long reset_reason;
 			int ret;
 			ret = kstrtoul(cmd + 4, 16, &code);
-
 			if (!ret) {
 				/* Bit-2 to bit-7 of SOFT_RB_SPARE for hard
 				 * reset reason:

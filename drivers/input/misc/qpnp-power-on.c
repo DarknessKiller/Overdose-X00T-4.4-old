@@ -32,6 +32,16 @@
 #include <linux/regulator/of_regulator.h>
 #include <linux/input/qpnp-power-on.h>
 #include <linux/power_supply.h>
+/* Huaqin add for ZQL1650-14 by lanshiming at 2018/01/17 start */
+#include <linux/timer.h>
+
+static struct timer_list tm;
+
+struct timer_data {
+    struct qpnp_pon *pon;
+    struct qpnp_pon_config *cfg;
+}timer_data;
+/* Huaqin add for ZQL1650-14 by lanshiming at 2018/01/17 end */
 
 #ifdef CONFIG_MACH_ASUS_X00TD
 #include <linux/timer.h>
@@ -1361,7 +1371,6 @@ static void start_timer(struct qpnp_pon *pon,  struct qpnp_pon_config *cfg){
     add_timer(&tm);
 }
 #endif
-
 static int qpnp_pon_config_init(struct qpnp_pon *pon)
 {
 	int rc = 0, i = 0, pmic_wd_bark_irq;
