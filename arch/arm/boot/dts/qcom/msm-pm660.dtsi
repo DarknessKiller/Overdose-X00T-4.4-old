@@ -639,7 +639,9 @@
 			qcom,pmic-revid = <&pm660_revid>;
 			qcom,pmic-misc = <&pm660_misc>;
 			qcom,misc-clk-trim-error-reg = <0xf3>;
-			qcom,actuator-type = <0>;
+                        //Huaqin modify for vib bring up by guojianghong at 2018/1/31 begin
+			qcom,actuator-type = <1>;
+                        //Huaqin modify for vib bring up by guojianghong at 2018/1/31 end
 			qcom,play-mode = "direct";
 			qcom,vmax-mv = <3000>;
 			qcom,ilim-ma = <800>;
