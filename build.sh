@@ -17,6 +17,6 @@
 	echo "Compile Done"
 	echo ""
 	cd $KERNELDIR/built
-	zip -r Overdose-R24-Release-X00T-`date +%Y%m%d_%H%M`.zip * -x "kernel_output.txt" "*.zip"
+	zip -r Overdose-R25-Release-X00T-`date +%Y%m%d_%H%M`.zip * -x "kernel_output.txt" "*.zip"
 	cd $KERNELDIR/
 	echo "Zip Done"
